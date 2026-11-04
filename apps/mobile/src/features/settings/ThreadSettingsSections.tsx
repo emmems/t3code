@@ -42,6 +42,7 @@ export function SettingsLabsRouteScreen() {
         contentContainerClassName="gap-6 px-5 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 18 }}
       >
+        <ProjectFoldersSettingsSection />
         <BetaSettingsSection />
         <LegacySettingsSection />
       </ScrollView>
@@ -222,6 +223,31 @@ export function NewThreadSettingsSection() {
         onValueChange={(value) => savePreferences({ useLastProjectForNewThreads: value })}
       />
     </SettingsSection>
+  );
+}
+
+function ProjectFoldersSettingsSection() {
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const enabled =
+    AsyncResult.isSuccess(preferences) && preferences.value.projectFoldersEnabled === true;
+
+  return (
+    <View className="gap-3">
+      <SettingsSection title="Beta">
+        <SettingsSwitchRow
+          icon="folder"
+          label="Project folders"
+          value={enabled}
+          onValueChange={(value) => savePreferences({ projectFoldersEnabled: value })}
+        />
+      </SettingsSection>
+      <Text className="px-2 text-sm text-foreground-muted">
+        Group threads into project folders. Pinned threads stay on top, and Snoozed and Settled stay
+        below the folders. While this is on, the Working section is off and threads are ordered by
+        their latest message.
+      </Text>
+    </View>
   );
 }
 

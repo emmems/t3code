@@ -1,4 +1,7 @@
-import { buildProjectGroups } from "@t3tools/client-runtime/state/project-grouping";
+import {
+  buildProjectGroups,
+  pickableProjectGroups,
+} from "@t3tools/client-runtime/state/project-grouping";
 import type {
   EnvironmentProject,
   EnvironmentThreadShell,
@@ -18,6 +21,7 @@ import * as Order from "effect/Order";
 
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
+import type { ThreadListV2FolderGroup, ThreadListV2FolderOptions } from "../threads/threadListV2";
 
 export type HomeProjectSortOrder = Exclude<SidebarProjectSortOrder, "manual">;
 
@@ -146,4 +150,48 @@ export function sortHomeProjectScopes(input: {
       }),
     ),
   );
+}
+
+/**
+ * The list's project folders, chosen as the desktop sidebar chooses them. A project filter
+ * shows that project's folder even when empty. Otherwise open projects follow pinned-first
+ * activity order, an archived project keeps a folder for its active threads below the rest,
+ * and only pinned projects keep an empty folder.
+ */
+export function buildHomeProjectFolders(input: {
+  readonly scopes: ReadonlyArray<HomeProjectScope>;
+  readonly selectedScope: HomeProjectScope | null;
+  readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly pendingTasks: ReadonlyArray<PendingNewTask>;
+  readonly collapsedKeys: ReadonlySet<string>;
+}): ThreadListV2FolderOptions {
+  const toFolderGroup = (scope: HomeProjectScope): ThreadListV2FolderGroup & HomeProjectScope => ({
+    ...scope,
+    memberProjectRefs: scope.projectRefs,
+  });
+  if (input.selectedScope !== null) {
+    return {
+      groups: [toFolderGroup(input.selectedScope)],
+      collapsedKeys: input.collapsedKeys,
+      keepEmpty: () => true,
+    };
+  }
+  const sorted = sortHomeProjectScopes({
+    scopes: input.scopes,
+    threads: input.threads,
+    pendingTasks: input.pendingTasks,
+    projectSortOrder: "updated_at",
+  });
+  const groups = [
+    ...pickableProjectGroups(sorted),
+    ...sorted.filter((scope) => scope.archived),
+  ].map(toFolderGroup);
+  const keptKeys = new Set(
+    groups.filter((group) => group.pinned && !group.archived).map((group) => group.key),
+  );
+  return {
+    groups,
+    collapsedKeys: input.collapsedKeys,
+    keepEmpty: (group) => keptKeys.has(group.key),
+  };
 }

@@ -63,6 +63,7 @@ import { useQueuedThreadKeys } from "../../state/use-thread-outbox";
 import {
   ThreadListV2PendingRow,
   ThreadListV2Row,
+  ThreadListV2ProjectFolderHeader,
   ThreadListV2SettledShelfHeader,
   ThreadListV2ShowMoreRow,
   ThreadListV2SnoozedShelfHeader,
@@ -80,6 +81,7 @@ import {
 import { useThreadListV2ShelfPreferences } from "../threads/use-thread-list-v2-shelf-preferences";
 import type { HomeListFilterMenuEnvironment } from "./home-list-filter-menu";
 import {
+  buildHomeProjectFolders,
   buildHomeProjectScopes,
   findHomeProjectScope,
   type HomeProjectSortOrder,
@@ -438,7 +440,31 @@ export function HomeScreen(props: HomeScreenProps) {
     toggleSettledShelf,
     toggleSnoozedShelf,
     toggleWorkingShelf,
+    projectFoldersEnabled,
+    collapsedProjectFolderKeys,
+    toggleProjectFolder,
   } = useThreadListV2ShelfPreferences();
+  const { threads: homeThreads, pendingTasks: homePendingTasks } = props;
+  const projectFolders = useMemo(
+    () =>
+      projectFoldersEnabled
+        ? buildHomeProjectFolders({
+            scopes: projectScopes,
+            selectedScope: v2ScopedProjectGroup,
+            threads: homeThreads,
+            pendingTasks: homePendingTasks,
+            collapsedKeys: collapsedProjectFolderKeys,
+          })
+        : null,
+    [
+      projectFoldersEnabled,
+      projectScopes,
+      v2ScopedProjectGroup,
+      homeThreads,
+      homePendingTasks,
+      collapsedProjectFolderKeys,
+    ],
+  );
   const now = useThreadListNow(props.threads);
   const listEnvironments = useAtomValue(threadListEnvironmentsAtom);
   const {
@@ -481,6 +507,7 @@ export function HomeScreen(props: HomeScreenProps) {
     snoozedShelfExpanded,
     settledShelfExpanded,
     selectedThreadKey,
+    folders: projectFolders,
   });
   // Called as `props.onSelectThread(...)`, the compiler would cache this handler on the whole
   // props object, which is new on every render of Home's parent.
@@ -537,6 +564,21 @@ export function HomeScreen(props: HomeScreenProps) {
           onSwipeableWillOpen={handleSwipeableWillOpen}
           simultaneousSwipeGesture={homeScrollGesture}
           activationKey={item.key}
+        />
+      );
+    }
+    if (item.type === "v2-project-folder") {
+      return (
+        <ThreadListV2ProjectFolderHeader
+          folderKey={item.folderKey}
+          title={item.title}
+          project={item.project}
+          collapsed={item.collapsed}
+          hiddenCount={item.hiddenCount}
+          dot={item.dot}
+          disabled={item.disabled}
+          onToggle={toggleProjectFolder}
+          pane={sidebarSurface ? "sidebar" : "screen"}
         />
       );
     }
@@ -623,7 +665,9 @@ export function HomeScreen(props: HomeScreenProps) {
         reorderSupported={
           item.item.pinned
             ? pinReorderEnvironmentIds.has(thread.environmentId)
-            : !workingShelfEnabled && activeReorderEnvironmentIds.has(thread.environmentId)
+            : !workingShelfEnabled &&
+              projectFolders === null &&
+              activeReorderEnvironmentIds.has(thread.environmentId)
         }
         canMoveUp={item.canMoveUp}
         canMoveDown={item.canMoveDown}
@@ -654,6 +698,7 @@ export function HomeScreen(props: HomeScreenProps) {
     selectedThreadKey,
     threadSearchMatchByKey,
     workingShelfEnabled,
+    projectFoldersEnabled,
   };
 
   const hasAnyThreads =

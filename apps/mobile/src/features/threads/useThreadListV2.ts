@@ -65,8 +65,13 @@ export function useThreadListV2(input: {
   readonly snoozedShelfExpanded: boolean;
   readonly settledShelfExpanded: boolean;
   readonly selectedThreadKey: string | null;
+  /** Project folders over the active rows; null keeps the flat list. */
+  readonly folders?: LayoutInput["folders"];
 }) {
-  const { threads, workingShelfEnabled } = input;
+  const { threads, folders } = input;
+  // Folders turn the Working shelf off and fix active order, as on desktop.
+  const workingShelfEnabled = input.workingShelfEnabled && folders == null;
+  const activeReorderable = !input.workingShelfEnabled && folders == null;
   const layoutTime = useMemo(
     () => threadListV2LayoutTime({ threads, now: input.now, searchQuery: input.searchQuery }),
     [threads, input.now, input.searchQuery],
@@ -101,7 +106,7 @@ export function useThreadListV2(input: {
       });
     return new Map([
       ...sectionAvailability("pinned"),
-      ...(workingShelfEnabled ? [] : sectionAvailability("active")),
+      ...(activeReorderable ? sectionAvailability("active") : []),
     ]);
   }, [
     threads,
@@ -112,7 +117,7 @@ export function useThreadListV2(input: {
     input.settlementEnvironmentIds,
     input.snoozeEnvironmentIds,
     input.queuedThreadKeys,
-    workingShelfEnabled,
+    activeReorderable,
   ]);
   // Older settled threads load in pages; the shelf lists them only as far as they are loaded.
   const scopes = useMemo(
@@ -153,6 +158,7 @@ export function useThreadListV2(input: {
         settledShelfExpanded: input.settledShelfExpanded,
         selectedThreadKey: input.selectedThreadKey,
         isListedSettled: isListed,
+        folders,
         unloadedSettledCount: unloadedCount(
           threads.filter(
             (thread) =>
@@ -187,6 +193,7 @@ export function useThreadListV2(input: {
       isListed,
       unloadedCount,
       scopes,
+      folders,
     ],
   );
   useOlderSettledShelfGrowth(olderSettledShelf, layout.listedSettledThreads);
@@ -213,6 +220,7 @@ export function useThreadListV2(input: {
     () =>
       buildThreadListV2ListItems({
         items: layout.items,
+        folders: layout.folders,
         pendingTasks,
         workingCount: layout.workingCount,
         workingShelfExpanded: input.workingShelfExpanded,

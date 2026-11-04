@@ -255,6 +255,32 @@ export function pickableProjectGroups<
   return [...open.filter((group) => group.pinned), ...open.filter((group) => !group.pinned)];
 }
 
+/**
+ * Project folders for a thread list. Folders follow `groups` order and threads keep their
+ * input order. A project with no threads gets a folder only when `keepEmpty` says so.
+ * A thread whose project is in no group has no folder and is left out.
+ */
+export function groupThreadsIntoProjectFolders<
+  TGroup extends { readonly memberProjectRefs: ReadonlyArray<ScopedProjectRef> },
+  TThread extends { readonly environmentId: EnvironmentId; readonly projectId: string },
+>(
+  groups: ReadonlyArray<TGroup>,
+  threads: ReadonlyArray<TThread>,
+  keepEmpty: (group: TGroup) => boolean,
+): Array<{ group: TGroup; threads: TThread[] }> {
+  const folders = groups.map((group) => ({ group, threads: [] as TThread[] }));
+  const folderByProject = new Map<string, (typeof folders)[number]>();
+  for (const folder of folders) {
+    for (const ref of folder.group.memberProjectRefs) {
+      folderByProject.set(`${ref.environmentId}:${ref.projectId}`, folder);
+    }
+  }
+  for (const thread of threads) {
+    folderByProject.get(`${thread.environmentId}:${thread.projectId}`)?.threads.push(thread);
+  }
+  return folders.filter((folder) => folder.threads.length > 0 || keepEmpty(folder.group));
+}
+
 function projectFreshnessTime(project: EnvironmentProject): number {
   const updatedAtTime = Date.parse(project.updatedAt);
   if (Number.isFinite(updatedAtTime)) {
