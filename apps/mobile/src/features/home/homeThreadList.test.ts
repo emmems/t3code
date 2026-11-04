@@ -5,9 +5,13 @@ import type {
 import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildHomeProjectScopes, findHomeProjectScope } from "./homeThreadList";
+import {
+  buildHomeProjectFolders,
+  buildHomeProjectScopes,
+  findHomeProjectScope,
+} from "./homeThreadList";
 import { makeThreadShellFixture } from "../../test-fixtures";
-import { buildThreadListV2Items } from "../threads/threadListV2";
+import { buildThreadListV2Items, buildThreadListV2ListItems } from "../threads/threadListV2";
 
 function makeProject(
   input: Partial<EnvironmentProject> & Pick<EnvironmentProject, "environmentId" | "id" | "title">,
@@ -43,6 +47,8 @@ function makeThread(
     ...input,
   });
 }
+
+const NOW_ISO = "2026-06-04T00:00:00.000Z";
 
 describe("home project scopes", () => {
   it("filters threads across both scratch hosts while retaining the selected environment boundary", () => {
@@ -221,5 +227,82 @@ describe("home project scopes", () => {
     expect(findHomeProjectScope(scopes, "environment-local:project-target")).toBe(targetScope);
     expect(findHomeProjectScope(scopes, "environment-local:missing")).toBeNull();
     expect(findHomeProjectScope(scopes, null)).toBeNull();
+  });
+
+  it("groups active threads into project folders as the desktop sidebar does", () => {
+    const environmentId = EnvironmentId.make("local");
+    const project = (id: string, extra: Partial<EnvironmentProject> = {}) =>
+      makeProject({ environmentId, id: ProjectId.make(id), title: id, ...extra });
+    const projects = [
+      project("quiet"),
+      project("busy"),
+      project("pinned-empty", { pinnedAt: "2026-06-01T00:00:00.000Z" }),
+      project("closed"),
+    ];
+    const thread = (id: string, projectId: string, extra: Partial<EnvironmentThreadShell> = {}) =>
+      makeThread({
+        environmentId,
+        id: ThreadId.make(id),
+        projectId: ProjectId.make(projectId),
+        title: id,
+        ...extra,
+      });
+    const threads = [
+      thread("pinned", "quiet", { pinnedAt: "2026-06-01T00:00:00.000Z" }),
+      thread("busy-new", "busy", { latestUserMessageAt: "2026-06-03T00:00:00.000Z" }),
+      thread("busy-old", "busy", { latestUserMessageAt: "2026-06-02T00:00:00.000Z" }),
+      thread("closed-open", "closed"),
+      thread("closed-asks", "closed", { hasPendingApprovals: true }),
+      thread("settled", "busy", { settledOverride: "settled", settledAt: NOW_ISO }),
+    ];
+    const scopes = buildHomeProjectScopes({
+      projects,
+      environmentId: null,
+      projectGroupingMode: "separate",
+    });
+    const closedKey = scopes.find((scope) => scope.title === "closed")!.key;
+    const layout = buildThreadListV2Items({
+      threads,
+      environmentId: null,
+      searchQuery: "",
+      now: NOW_ISO,
+      workingShelfEnabled: true,
+      selectedThreadKey: `${environmentId}:closed-open`,
+      folders: buildHomeProjectFolders({
+        scopes,
+        selectedScope: null,
+        threads,
+        pendingTasks: [],
+        collapsedKeys: new Set([closedKey]),
+      }),
+    });
+    const rows = buildThreadListV2ListItems({
+      items: layout.items,
+      folders: layout.folders,
+      pendingTasks: [],
+      settledCount: layout.settledCount,
+      settledShelfExpanded: true,
+      settledShelfHeaderIndex: layout.settledShelfHeaderIndex,
+    }).map((row) => {
+      if (row.type === "v2-project-folder") {
+        return `${row.title}${row.collapsed ? ` closed ${row.hiddenCount} ${row.dot}` : ""}`;
+      }
+      return row.type === "v2-thread" ? `  ${row.item.thread.id}` : row.type;
+    });
+
+    // Pinned threads stay on top, the pinned project keeps its empty folder, a project without
+    // active threads has none, and a closed folder keeps the open thread and flags the rest.
+    expect(rows).toEqual([
+      "  pinned",
+      "pinned-empty",
+      "busy",
+      "  busy-new",
+      "  busy-old",
+      "closed closed 1 attention",
+      "  closed-open",
+      "v2-settled-shelf",
+      "  settled",
+    ]);
+    expect(layout.workingCount).toBe(0);
   });
 });

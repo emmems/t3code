@@ -73,6 +73,7 @@ import {
   resolveThreadListV2Status,
   resolveThreadListV2ProviderDrivers,
   resolveThreadListV2SwipeActions,
+  type ThreadListV2FolderDot,
   type ThreadListV2Status,
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
@@ -297,6 +298,93 @@ export const ThreadListV2SettledShelfHeader = memo(function ThreadListV2SettledS
 ) {
   return <ThreadListV2ShelfHeader {...props} kind="settled" />;
 });
+
+const FOLDER_DOT_CLASS_NAME: Record<ThreadListV2FolderDot, string> = {
+  attention: "bg-warning-foreground",
+  failed: "bg-danger-foreground",
+  unread: "bg-adaptive-emerald-700-300",
+  working: "bg-adaptive-sky-600-400",
+};
+
+const FOLDER_DOT_LABEL: Record<ThreadListV2FolderDot, string> = {
+  attention: ", needs you",
+  failed: ", failed",
+  unread: ", done",
+  working: ", working",
+};
+
+/**
+ * A project folder over its active threads. A closed folder counts its hidden threads and shows
+ * the most urgent one's status, so it still says when a hidden thread needs you.
+ */
+export const ThreadListV2ProjectFolderHeader = memo(
+  function ThreadListV2ProjectFolderHeader(props: {
+    readonly folderKey: string;
+    readonly title: string;
+    readonly project: EnvironmentProject;
+    readonly collapsed: boolean;
+    readonly hiddenCount: number;
+    readonly dot: ThreadListV2FolderDot | null;
+    readonly disabled?: boolean;
+    readonly onToggle: (folderKey: string) => void;
+    readonly pane?: "screen" | "sidebar";
+  }) {
+    const sidebarPane = props.pane === "sidebar";
+    const { folderKey, onToggle } = props;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${props.title}${props.dot ? FOLDER_DOT_LABEL[props.dot] : ""}`}
+        accessibilityHint={`${props.collapsed ? "Opens" : "Closes"} the ${props.title} folder.`}
+        accessibilityState={{ disabled: props.disabled, expanded: !props.collapsed }}
+        className={cn("mb-1 mt-4 flex-row items-center gap-2.5", sidebarPane ? "px-3" : "px-5")}
+        disabled={props.disabled}
+        onPress={() => onToggle(folderKey)}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      >
+        <ProjectFavicon
+          environmentId={props.project.environmentId}
+          faviconPath={props.project.faviconPath}
+          projectIcon={props.project.projectIcon}
+          size={16}
+          projectTitle={props.title}
+          workspaceRoot={props.project.workspaceRoot}
+        />
+        <Text
+          numberOfLines={1}
+          className={cn(
+            "min-w-0 flex-1 text-sm font-t3-medium",
+            sidebarPane ? "text-drawer-foreground" : "text-foreground",
+          )}
+        >
+          {props.title}
+        </Text>
+        {props.dot ? (
+          <View className={cn("size-1.5 rounded-full", FOLDER_DOT_CLASS_NAME[props.dot])} />
+        ) : null}
+        {props.collapsed && props.hiddenCount > 0 ? (
+          <Text
+            className={cn(
+              "text-xs tabular-nums",
+              sidebarPane ? "text-drawer-foreground-muted" : "text-foreground-tertiary",
+            )}
+          >
+            {props.hiddenCount}
+          </Text>
+        ) : null}
+        <SymbolView
+          name="chevron.down"
+          size={10}
+          tintColorClassName={
+            sidebarPane ? "accent-drawer-foreground-muted" : "accent-foreground-muted"
+          }
+          type="monochrome"
+          style={{ transform: [{ rotate: props.collapsed ? "-90deg" : "0deg" }] }}
+        />
+      </Pressable>
+    );
+  },
+);
 
 export const ThreadListV2ShowMoreRow = memo(function ThreadListV2ShowMoreRow(props: {
   readonly pane?: "screen" | "sidebar";
